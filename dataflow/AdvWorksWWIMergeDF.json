@@ -19,7 +19,22 @@
 					"name": "WWImportersDBSource"
 				}
 			],
-			"sinks": [],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "MergeDBProducts",
+						"type": "DatasetReference"
+					},
+					"name": "MergeDBProductSink"
+				},
+				{
+					"dataset": {
+						"referenceName": "MergeDBClothes",
+						"type": "DatasetReference"
+					},
+					"name": "MergeDBClothesSink"
+				}
+			],
 			"transformations": [],
 			"scriptLines": [
 				"source(output(",
@@ -83,7 +98,30 @@
 				"     allowSchemaDrift: true,",
 				"     validateSchema: false,",
 				"     isolationLevel: 'READ_UNCOMMITTED',",
-				"     format: 'table') ~> WWImportersDBSource"
+				"     format: 'table') ~> WWImportersDBSource",
+				"AdvWorksDBSource sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     deletable:false,",
+				"     insertable:true,",
+				"     updateable:false,",
+				"     upsertable:false,",
+				"     recreate:true,",
+				"     format: 'table',",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     saveOrder: 1,",
+				"     errorHandlingOption: 'stopOnFirstError') ~> MergeDBProductSink",
+				"WWImportersDBSource sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     deletable:false,",
+				"     insertable:true,",
+				"     updateable:false,",
+				"     upsertable:false,",
+				"     format: 'table',",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     saveOrder: 1,",
+				"     errorHandlingOption: 'stopOnFirstError') ~> MergeDBClothesSink"
 			]
 		}
 	}
