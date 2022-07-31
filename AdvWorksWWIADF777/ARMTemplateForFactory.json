@@ -63,7 +63,20 @@
 							"name": "MergeDBClothesSink"
 						}
 					],
-					"transformations": [],
+					"transformations": [
+						{
+							"name": "SortByName"
+						},
+						{
+							"name": "FilterDiscontinued"
+						},
+						{
+							"name": "DeriveFinalCostandProductType"
+						},
+						{
+							"name": "DeriveProductType"
+						}
+					],
 					"scriptLines": [
 						"source(output(",
 						"          ProductID as integer,",
@@ -127,7 +140,19 @@
 						"     validateSchema: false,",
 						"     isolationLevel: 'READ_UNCOMMITTED',",
 						"     format: 'table') ~> WWImportersDBSource",
-						"AdvWorksDBSource sink(allowSchemaDrift: true,",
+						"WWImportersDBSource sort(asc(StockItemName, true),",
+						"     caseInsensitive: true) ~> SortByName",
+						"AdvWorksDBSource filter(isNull(SellEndDate)) ~> FilterDiscontinued",
+						"SortByName derive(Cost = UnitPrice*(1+(TaxRate/100)),",
+						"          ItemType = case(\r",
+						"    in(['S','M','L','3XL','4XL','5XL','6XL','7XL','XS','XXS','XL','XXL'],Size)\r",
+						"    ,'Clothing', 'Product'\r",
+						")) ~> DeriveFinalCostandProductType",
+						"FilterDiscontinued derive(ItemType = case(\r",
+						"    in(['S','M','L','XL'], Size)\r",
+						"    ,'Clothing', 'Product'\r",
+						")) ~> DeriveProductType",
+						"DeriveProductType sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     deletable:false,",
 						"     insertable:true,",
@@ -139,7 +164,7 @@
 						"     skipDuplicateMapOutputs: true,",
 						"     saveOrder: 1,",
 						"     errorHandlingOption: 'stopOnFirstError') ~> MergeDBProductSink",
-						"WWImportersDBSource sink(allowSchemaDrift: true,",
+						"DeriveFinalCostandProductType sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     deletable:false,",
 						"     insertable:true,",
@@ -521,6 +546,55 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/MergeDB')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/AdvWorksWWiMergePL')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "AdvWorksWWIMergeDF",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "1.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "AdvWorksWWIMergeDF",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"AdvWorksDBSource": {},
+									"WWImportersDBSource": {},
+									"MergeDBProductSink": {},
+									"MergeDBClothesSink": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/AdvWorksWWIMergeDF')]"
 			]
 		}
 	]
