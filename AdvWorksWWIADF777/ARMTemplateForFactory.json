@@ -45,6 +45,13 @@
 								"type": "DatasetReference"
 							},
 							"name": "WWImportersDBSource"
+						},
+						{
+							"dataset": {
+								"referenceName": "WWImportersStockItems",
+								"type": "DatasetReference"
+							},
+							"name": "WWImportersColorSource"
 						}
 					],
 					"sinks": [
@@ -75,6 +82,21 @@
 						},
 						{
 							"name": "DeriveProductType"
+						},
+						{
+							"name": "SelectAdvWorksColumns"
+						},
+						{
+							"name": "SelectWWImporters"
+						},
+						{
+							"name": "WWImportersColorsLookup"
+						},
+						{
+							"name": "AdvWorksSplitClothesFromProducts"
+						},
+						{
+							"name": "WWImportersSplitClothesFromProducts"
 						}
 					],
 					"scriptLines": [
@@ -140,6 +162,15 @@
 						"     validateSchema: false,",
 						"     isolationLevel: 'READ_UNCOMMITTED',",
 						"     format: 'table') ~> WWImportersDBSource",
+						"source(output(",
+						"          ColorID as integer,",
+						"          Color as string",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     isolationLevel: 'READ_UNCOMMITTED',",
+						"     query: 'SELECT ColorID, ColorName as Color from Warehouse.Colors',",
+						"     format: 'query') ~> WWImportersColorSource",
 						"WWImportersDBSource sort(asc(StockItemName, true),",
 						"     caseInsensitive: true) ~> SortByName",
 						"AdvWorksDBSource filter(isNull(SellEndDate)) ~> FilterDiscontinued",
@@ -148,11 +179,38 @@
 						"    in(['S','M','L','3XL','4XL','5XL','6XL','7XL','XS','XXS','XL','XXL'],Size)\r",
 						"    ,'Clothing', 'Product'\r",
 						")) ~> DeriveFinalCostandProductType",
-						"FilterDiscontinued derive(ItemType = case(\r",
+						"SelectAdvWorksColumns derive(ItemType = case(\r",
 						"    in(['S','M','L','XL'], Size)\r",
 						"    ,'Clothing', 'Product'\r",
 						")) ~> DeriveProductType",
-						"DeriveProductType sink(allowSchemaDrift: true,",
+						"FilterDiscontinued select(mapColumn(",
+						"          Name,",
+						"          Color,",
+						"          Cost = StandardCost,",
+						"          RetailPrice = ListPrice,",
+						"          Size",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> SelectAdvWorksColumns",
+						"WWImportersColorsLookup select(mapColumn(",
+						"          Name = StockItemName,",
+						"          Color,",
+						"          Cost,",
+						"          RetailPrice = RecommendedRetailPrice,",
+						"          Size,",
+						"          ItemType",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> SelectWWImporters",
+						"DeriveFinalCostandProductType, WWImportersColorSource lookup(WWImportersDBSource@ColorID == WWImportersColorSource@ColorID,",
+						"     multiple: false,",
+						"     pickup: 'any',",
+						"     broadcast: 'auto')~> WWImportersColorsLookup",
+						"DeriveProductType split(ItemType == 'Product',",
+						"     disjoint: false) ~> AdvWorksSplitClothesFromProducts@(AdvWorksProducts, AdvWorksClothing)",
+						"SelectWWImporters split(ItemType == 'Product',",
+						"     disjoint: false) ~> WWImportersSplitClothesFromProducts@(WWImportersProducts, WWImportersClothing)",
+						"AdvWorksSplitClothesFromProducts@AdvWorksProducts sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     deletable:false,",
 						"     insertable:true,",
@@ -164,7 +222,7 @@
 						"     skipDuplicateMapOutputs: true,",
 						"     saveOrder: 1,",
 						"     errorHandlingOption: 'stopOnFirstError') ~> MergeDBProductSink",
-						"DeriveFinalCostandProductType sink(allowSchemaDrift: true,",
+						"WWImportersSplitClothesFromProducts@WWImportersProducts sink(allowSchemaDrift: true,",
 						"     validateSchema: false,",
 						"     deletable:false,",
 						"     insertable:true,",
@@ -574,6 +632,7 @@
 								"datasetParameters": {
 									"AdvWorksDBSource": {},
 									"WWImportersDBSource": {},
+									"WWImportersColorSource": {},
 									"MergeDBProductSink": {},
 									"MergeDBClothesSink": {}
 								}
